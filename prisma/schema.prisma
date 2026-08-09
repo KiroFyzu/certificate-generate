@@ -38,27 +38,42 @@ model Event {
   created_at        DateTime      @default(now())
   updated_at        DateTime      @updatedAt
   certificates      Certificate[]
+  claim_codes       ClaimCode[]
+}
+
+model ClaimCode {
+  id           String        @id @default(uuid())
+  event_id     String
+  code         String        @unique
+  max_uses     Int           @default(1) // how many different users may redeem this same code
+  used_count   Int           @default(0)
+  note         String? // admin bookkeeping, e.g. "dibagikan di grup WhatsApp panitia"
+  is_active    Boolean       @default(true) // admin can deactivate early to stop further claims
+  created_by   String?
+  created_at   DateTime      @default(now())
+  event        Event         @relation(fields: [event_id], references: [id])
+  certificates Certificate[]
 }
 
 model Certificate {
-  id                 String    @id @default(uuid())
-  user_id            String? // null until claimed, for claim-code slots
+  id                 String     @id @default(uuid())
+  user_id            String?
   event_id           String
-  certificate_id     String    @unique // e.g. CERT-7F4A92D81C
+  certificate_id     String     @unique // e.g. CERT-7F4A92D81C
   verification_token String?
-  status             String    @default("ACTIVE") // ACTIVE, REVOKED, PENDING (unclaimed claim-code slot)
-  claim_code         String?   @unique // only set for claim-code issued certificates
+  status             String     @default("ACTIVE") // ACTIVE, REVOKED
+  claim_code_id      String? // set when this certificate was obtained by redeeming a ClaimCode
   claimed_at         DateTime?
-  note               String? // admin bookkeeping note (e.g. intended recipient), not authoritative for PDF name
   generation_ip      String?
   revoked_at         DateTime?
   revoked_reason     String?
   revoked_by         String?
-  issued_at          DateTime  @default(now())
-  created_at         DateTime  @default(now())
-  updated_at         DateTime  @updatedAt
-  user               User?     @relation(fields: [user_id], references: [id])
-  event              Event     @relation(fields: [event_id], references: [id])
+  issued_at          DateTime   @default(now())
+  created_at         DateTime   @default(now())
+  updated_at         DateTime   @updatedAt
+  user               User?      @relation(fields: [user_id], references: [id])
+  event              Event      @relation(fields: [event_id], references: [id])
+  claim_code         ClaimCode? @relation(fields: [claim_code_id], references: [id])
 
   @@unique([user_id, event_id])
 }
