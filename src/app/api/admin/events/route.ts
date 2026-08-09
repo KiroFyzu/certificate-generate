@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       certificate_title,
       completion_text,
       issuance_mode,
+      logo_position,
     } = body
 
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -42,6 +43,10 @@ export async function POST(request: Request) {
 
     if (issuance_mode && !['OPEN', 'CLAIM'].includes(issuance_mode)) {
       return NextResponse.json({ error: 'Mode penerbitan tidak valid' }, { status: 400 })
+    }
+
+    if (logo_position && !['top-left', 'top-center', 'top-right'].includes(logo_position)) {
+      return NextResponse.json({ error: 'Posisi logo tidak valid' }, { status: 400 })
     }
 
     const event = await prisma.event.create({
@@ -55,6 +60,7 @@ export async function POST(request: Request) {
         certificate_title: certificate_title || undefined,
         completion_text: completion_text || undefined,
         issuance_mode: issuance_mode || 'OPEN',
+        logo_position: logo_position || undefined,
         created_by: auth.session.userId,
       },
     })

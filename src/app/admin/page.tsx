@@ -529,10 +529,55 @@ function EventFormModal({ event, onClose, onSaved }: { event?: any; onClose: () 
     certificate_title: event?.certificate_title || 'CERTIFICATE OF APPRECIATION',
     completion_text: event?.completion_text || 'for outstanding participation and successfully completing',
     issuance_mode: event?.issuance_mode || 'OPEN',
+    logo_position: event?.logo_position || 'top-center',
   })
   const [templateFile, setTemplateFile] = useState<File | null>(null)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewing, setPreviewing] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+
+  useEffect(() => {
+    // Revoke the blob URL when it changes or the modal unmounts, so we don't leak memory.
+    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }
+  }, [previewUrl])
+
+  const buildPreviewFormData = () => {
+    const fd = new FormData()
+    fd.append('name', form.name)
+    fd.append('certificate_title', form.certificate_title)
+    fd.append('completion_text', form.completion_text)
+    fd.append('signer_name', form.signer_name)
+    fd.append('signer_title', form.signer_title)
+    fd.append('logo_position', form.logo_position)
+    if (templateFile) fd.append('template', templateFile)
+    else if (event?.template_path) fd.append('template_path', event.template_path)
+    if (logoFile) fd.append('logo', logoFile)
+    else if (event?.logo_path) fd.append('logo_path', event.logo_path)
+    return fd
+  }
+
+  const handlePreview = async () => {
+    setPreviewing(true)
+    setPreviewError('')
+    try {
+      const res = await fetch('/api/admin/events/preview', { method: 'POST', body: buildPreviewFormData() })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Gagal membuat preview')
+      }
+      const blob = await res.blob()
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      setPreviewUrl(URL.createObjectURL(blob))
+    } catch (err: any) {
+      setPreviewError(err.message)
+    } finally {
+      setPreviewing(false)
+    }
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -557,6 +602,15 @@ function EventFormModal({ event, onClose, onSaved }: { event?: any; onClose: () 
         if (!uploadRes.ok) {
           const uploadData = await uploadRes.json()
           throw new Error(uploadData.error || 'Event tersimpan, tapi upload template gagal')
+        }
+      }
+      if (logoFile) {
+        const fd = new FormData()
+        fd.append('file', logoFile)
+        const uploadRes = await fetch(`/api/admin/events/${eventId}/logo`, { method: 'POST', body: fd })
+        if (!uploadRes.ok) {
+          const uploadData = await uploadRes.json()
+          throw new Error(uploadData.error || 'Event tersimpan, tapi upload logo gagal')
         }
       }
 
@@ -640,6 +694,44 @@ function EventFormModal({ event, onClose, onSaved }: { event?: any; onClose: () 
             className="w-full text-sm text-slate-600 dark:text-slate-300" />
           {event?.template_path && !templateFile && (
             <p className="text-xs text-slate-400 mt-1">Sudah ada background tersimpan. Upload file baru untuk menggantinya.</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Logo (opsional, PNG/JPG, maks 2MB)
+            </label>
+            <input type="file" accept=".png,.jpg,.jpeg" onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+              className="w-full text-sm text-slate-600 dark:text-slate-300" />
+            {event?.logo_path && !logoFile && (
+              <p className="text-xs text-slate-400 mt-1">Sudah ada logo tersimpan. Upload file baru untuk menggantinya.</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Posisi Logo</label>
+            <select value={form.logo_position} onChange={(e) => setForm({ ...form, logo_position: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm">
+              <option value="top-left">Kiri atas</option>
+              <option value="top-center">Tengah atas</option>
+              <option value="top-right">Kanan atas</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Preview Sertifikat</p>
+            <button type="button" onClick={handlePreview} disabled={previewing || !form.name}
+              className="text-xs font-semibold text-purple-600 hover:text-purple-800 disabled:opacity-50">
+              {previewing ? 'Membuat preview...' : previewUrl ? 'Perbarui Preview' : 'Lihat Preview'}
+            </button>
+          </div>
+          {previewError && <p className="text-xs text-red-600 dark:text-red-400 mb-2">{previewError}</p>}
+          {previewUrl ? (
+            <iframe src={previewUrl} className="w-full h-[420px] rounded-lg border border-slate-200 dark:border-slate-700" title="Preview sertifikat" />
+          ) : (
+            <p className="text-xs text-slate-400">Isi nama event dulu, lalu klik "Lihat Preview" untuk melihat tampilan sertifikatnya (pakai nama contoh) sebelum disimpan.</p>
           )}
         </div>
 

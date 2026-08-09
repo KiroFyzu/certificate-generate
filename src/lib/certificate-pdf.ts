@@ -17,6 +17,8 @@ export interface CertificatePdfEvent {
   signer_name: string | null
   signer_title: string | null
   template_path: string | null
+  logo_path: string | null
+  logo_position: string
 }
 
 export interface CertificatePdfInput {
@@ -105,6 +107,37 @@ export async function generateCertificatePdf({ certificate, user, event, verifyU
   // templateKind === 'pdf': admin's own template is assumed to already carry the
   // visual design, so we only draw text/QR on top of it below.
 
+  // DRAW LOGO (optional, top corner/center)
+  if (event.logo_path) {
+    const logoBytes = fs.readFileSync(path.join(process.cwd(), 'public', event.logo_path))
+    const isPngLogo = event.logo_path.toLowerCase().endsWith('.png')
+    const logoImage = isPngLogo ? await pdfDoc.embedPng(logoBytes) : await pdfDoc.embedJpg(logoBytes)
+
+    const maxLogoHeight = 70
+    const maxLogoWidth = 180
+    const scale = Math.min(maxLogoHeight / logoImage.height, maxLogoWidth / logoImage.width, 1)
+    const logoWidth = logoImage.width * scale
+    const logoHeight = logoImage.height * scale
+    const topMargin = 20
+    const sideMargin = 85 // clears the corner accents on the default design
+
+    let logoX: number
+    if (event.logo_position === 'top-left') {
+      logoX = sideMargin
+    } else if (event.logo_position === 'top-right') {
+      logoX = width - sideMargin - logoWidth
+    } else {
+      logoX = (width - logoWidth) / 2
+    }
+
+    firstPage.drawImage(logoImage, {
+      x: logoX,
+      y: height - topMargin - logoHeight,
+      width: logoWidth,
+      height: logoHeight,
+    })
+  }
+
   // DRAW TEXT
   const titleText = event.certificate_title
   const titleSize = 32
@@ -174,20 +207,18 @@ export async function generateCertificatePdf({ certificate, user, event, verifyU
     day: 'numeric', month: 'long', year: 'numeric',
   })
 
-  // Draw Date and Signature Line
+  // Draw Date (well above the signature block so the two never collide)
   const dateText = `Date: ${dateIssued}`
   firstPage.drawText(dateText, {
-    x: 100, y: 110,
+    x: 100, y: 140,
     size: 12,
     font: fontBold,
     color: navyBlue,
   })
-  firstPage.drawLine({
-    start: { x: 90, y: 100 },
-    end: { x: 250, y: 100 },
-    thickness: 1,
-    color: navyBlue,
-  })
+
+  // Signature block: signer name (if any) sits right above the line, like a
+  // signature; the line's caption below it is the signer's title, or a
+  // generic "Authorized Signature" when no signer is configured.
   if (event.signer_name) {
     firstPage.drawText(event.signer_name, {
       x: 100, y: 104,
@@ -196,6 +227,12 @@ export async function generateCertificatePdf({ certificate, user, event, verifyU
       color: navyBlue,
     })
   }
+  firstPage.drawLine({
+    start: { x: 90, y: 100 },
+    end: { x: 250, y: 100 },
+    thickness: 1,
+    color: navyBlue,
+  })
   firstPage.drawText(event.signer_name ? (event.signer_title || 'Penanggung Jawab') : 'Authorized Signature', {
     x: 115, y: 80,
     size: 10,

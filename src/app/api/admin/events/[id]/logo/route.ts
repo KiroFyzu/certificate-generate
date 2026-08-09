@@ -23,14 +23,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const relativePath = await saveEventUpload({
       eventId: id,
       file,
-      allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
-      maxSizeBytes: 5 * 1024 * 1024,
-      previousPath: event.template_path,
+      allowedExtensions: ['png', 'jpg', 'jpeg'],
+      maxSizeBytes: 2 * 1024 * 1024,
+      suffix: '-logo',
+      previousPath: event.logo_path,
     })
 
     const updated = await prisma.event.update({
       where: { id },
-      data: { template_path: relativePath },
+      data: { logo_path: relativePath },
     })
 
     return NextResponse.json({ success: true, event: updated })

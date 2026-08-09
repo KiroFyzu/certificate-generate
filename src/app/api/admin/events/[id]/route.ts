@@ -32,6 +32,7 @@ const EDITABLE_FIELDS = [
   'completion_text',
   'issuance_mode',
   'is_active',
+  'logo_position',
 ] as const
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -44,6 +45,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (body.issuance_mode && !['OPEN', 'CLAIM'].includes(body.issuance_mode)) {
       return NextResponse.json({ error: 'Mode penerbitan tidak valid' }, { status: 400 })
+    }
+    if (body.logo_position && !['top-left', 'top-center', 'top-right'].includes(body.logo_position)) {
+      return NextResponse.json({ error: 'Posisi logo tidak valid' }, { status: 400 })
     }
     if (typeof body.name === 'string' && !body.name.trim()) {
       return NextResponse.json({ error: 'Nama event tidak boleh kosong' }, { status: 400 })

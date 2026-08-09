@@ -30,6 +30,8 @@ model Event {
   certificate_title String        @default("CERTIFICATE OF APPRECIATION")
   completion_text   String        @default("for outstanding participation and successfully completing")
   template_path     String? // path to uploaded background (pdf/png/jpg), relative to /public. Null = default built-in design.
+  logo_path         String? // path to uploaded logo image (png/jpg), relative to /public. Null = no logo.
+  logo_position     String        @default("top-center") // top-left | top-center | top-right
   issuance_mode     String        @default("OPEN") // OPEN (self-service) or CLAIM (code/admin-issued only)
   is_active         Boolean       @default(true)
   created_by        String?
