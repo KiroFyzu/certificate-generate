@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const totalCertificates = await prisma.certificate.count()
     const verifiedCertificates = await prisma.certificate.count({ where: { status: 'ACTIVE' } })
     const revokedCertificates = await prisma.certificate.count({ where: { status: 'REVOKED' } })
-    const pendingClaims = await prisma.certificate.count({ where: { status: 'PENDING' } })
+    const activeClaimCodes = await prisma.claimCode.count({ where: { is_active: true } })
     const suspiciousActivities = await prisma.securityEvent.count()
 
     return NextResponse.json({
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
         totalCertificates,
         verifiedCertificates,
         revokedCertificates,
-        pendingClaims,
+        activeClaimCodes,
         suspiciousActivities
       }
     })

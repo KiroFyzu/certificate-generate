@@ -1,9 +1,26 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth'
-import { generateCertificateId, generateClaimCode } from '@/lib/certificate-id'
+import { generateClaimCode } from '@/lib/certificate-id'
 
-const MAX_COUNT = 100
+const MAX_USES_CAP = 10000
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdmin(request)
+  if (!auth.ok) return auth.response
+
+  try {
+    const { id: eventId } = await params
+    const claimCodes = await prisma.claimCode.findMany({
+      where: { event_id: eventId },
+      orderBy: { created_at: 'desc' },
+    })
+    return NextResponse.json({ success: true, claimCodes })
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin(request)
@@ -18,32 +35,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const body = await request.json().catch(() => ({}))
     const note: string | null = body.note || null
-    const count: number = Math.max(1, Math.min(MAX_COUNT, Number(body.count) || 1))
+    const maxUses = Math.max(1, Math.min(MAX_USES_CAP, Number(body.max_uses) || 1))
 
-    const created = []
-    for (let i = 0; i < count; i++) {
-      const certificate = await prisma.certificate.create({
-        data: {
-          event_id: eventId,
-          certificate_id: generateCertificateId(),
-          claim_code: generateClaimCode(),
-          status: 'PENDING',
-          note,
-        },
-      })
-      created.push(certificate)
-    }
+    const claimCode = await prisma.claimCode.create({
+      data: {
+        event_id: eventId,
+        code: generateClaimCode(),
+        max_uses: maxUses,
+        note,
+        created_by: auth.session.userId,
+      },
+    })
 
     await prisma.securityEvent.create({
       data: {
         user_id: auth.session.userId,
         ip_address: request.headers.get('x-forwarded-for') || '127.0.0.1',
-        event_type: 'CREATE_CLAIM_CODES',
-        metadata: JSON.stringify({ event_id: eventId, count }),
+        event_type: 'CREATE_CLAIM_CODE',
+        metadata: JSON.stringify({ event_id: eventId, max_uses: maxUses }),
       },
     })
 
-    return NextResponse.json({ success: true, certificates: created })
+    return NextResponse.json({ success: true, claimCode })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

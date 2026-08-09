@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     if (q) {
       where.OR = [
         { certificate_id: { contains: q } },
-        { claim_code: { contains: q } },
+        { claim_code: { code: { contains: q } } },
         { user: { full_name: { contains: q } } },
         { user: { email: { contains: q } } },
       ]
@@ -29,6 +29,7 @@ export async function GET(request: Request) {
       include: {
         event: { select: { id: true, name: true } },
         user: { select: { id: true, full_name: true, email: true } },
+        claim_code: { select: { id: true, code: true } },
       },
       orderBy: { created_at: 'desc' },
       take: 500,

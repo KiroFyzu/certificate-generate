@@ -19,7 +19,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const updated = await prisma.certificate.update({
       where: { id },
       data: {
-        status: certificate.user_id ? 'ACTIVE' : 'PENDING',
+        status: 'ACTIVE',
         revoked_at: null,
         revoked_reason: null,
         revoked_by: null,

@@ -17,9 +17,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ cert
       },
     })
 
-    // A certificate that doesn't exist, or is still an unclaimed claim-code slot,
-    // is treated the same way publicly: not found.
-    if (!certificate || certificate.status === 'PENDING' || !certificate.user) {
+    if (!certificate || !certificate.user) {
       return NextResponse.json({ error: 'Sertifikat tidak ditemukan' }, { status: 404 })
     }
 
