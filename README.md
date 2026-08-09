@@ -62,6 +62,23 @@ npm run start
 
 `start` juga berjalan di port `30006`.
 
+## Menjalankan lewat Docker
+
+Repo ini menyediakan `Dockerfile` (multi-stage: build lalu jalankan `next start`) dan `docker-compose.yml`.
+
+1. Pastikan `.env` sudah ada dan berisi `JWT_SECRET` (dipakai `docker-compose.yml` lewat `${JWT_SECRET}`). `DATABASE_URL` untuk container sudah di-set otomatis lewat compose, tidak perlu diubah.
+2. Build & jalankan:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   Saat container start, `prisma migrate deploy` otomatis dijalankan dulu (menerapkan migrasi ke database di volume `sertif-data`) sebelum server production (`next start`, port `30006`) menyala. Buka [http://localhost:30006](http://localhost:30006).
+
+3. Database SQLite disimpan di named volume `sertif-data` (path `/app/data/dev.db` di dalam container) supaya datanya tidak hilang saat container di-rebuild/restart.
+
+Kalau sebelumnya sempat menemui error `Could not find a production build in the '.next' directory`, itu artinya image yang dipakai menjalankan `next start` tanpa lebih dulu menjalankan `next build` (atau hasil build `.next` tidak ikut ter-copy ke stage akhir). `Dockerfile` di repo ini sudah menjalankan `npm run build` di build stage dan meng-copy folder `.next` ke image final, jadi masalah itu seharusnya tidak muncul lagi.
+
 ## Membuat akun admin
 
 Belum ada UI untuk promote user jadi admin, jadi pakai salah satu cara berikut setelah database ter-migrasi:

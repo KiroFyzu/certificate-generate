@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    ports:
+      - "30006:30006"
+    environment:
+      DATABASE_URL: "file:/app/data/dev.db"
+      JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - sertif-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  sertif-data:
