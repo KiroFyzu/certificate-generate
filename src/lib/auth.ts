@@ -32,6 +32,19 @@ export async function decrypt(input: string): Promise<SessionPayload | null> {
   }
 }
 
+/**
+ * True if the client's original request arrived over HTTPS. Respects a reverse
+ * proxy's X-Forwarded-Proto header, since Next.js itself may only see plain HTTP
+ * from the proxy. Used to decide whether the session cookie can carry the
+ * `Secure` flag — browsers silently drop `Secure` cookies set over plain HTTP,
+ * which otherwise breaks login on deployments without TLS in front of them.
+ */
+export function isSecureRequest(request: Request): boolean {
+  const forwardedProto = request.headers.get('x-forwarded-proto')
+  if (forwardedProto) return forwardedProto.split(',')[0].trim() === 'https'
+  return new URL(request.url).protocol === 'https:'
+}
+
 /** Reads and verifies the `session` cookie from an API route's Request. */
 export async function getSession(request: Request): Promise<SessionPayload | null> {
   const sessionCookie = request.headers.get('cookie')?.split('session=')[1]?.split(';')[0]

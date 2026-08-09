@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
-import { encrypt } from '@/lib/auth'
+import { encrypt, isSecureRequest } from '@/lib/auth'
 import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(request: Request) {
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     // Set cookie
     response.cookies.set('session', session, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecureRequest(request),
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24 // 24 hours
