@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id              String         @id @default(uuid())
+  full_name       String
+  email           String         @unique
+  password_hash   String
+  registration_ip String?
+  role            String         @default("USER") // USER or ADMIN
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+  certificate     Certificate?
+  security_events SecurityEvent[]
+}
+
+model Certificate {
+  id                 String   @id @default(uuid())
+  user_id            String   @unique
+  certificate_id     String   @unique // e.g. CERT-7F4A92D81C
+  verification_token String?  
+  status             String   @default("ACTIVE") // ACTIVE, REVOKED
+  generation_ip      String?
+  issued_at          DateTime @default(now())
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  user               User     @relation(fields: [user_id], references: [id])
+}
+
+model SecurityEvent {
+  id          String   @id @default(uuid())
+  user_id     String?
+  ip_address  String
+  event_type  String
+  metadata    String?  
+  created_at  DateTime @default(now())
+  user        User?    @relation(fields: [user_id], references: [id])
+}
+
+model RateLimit {
+  id         String   @id @default(uuid())
+  ip_address String
+  endpoint   String
+  hits       Int      @default(1)
+  expires_at DateTime
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([ip_address, endpoint])
+}
