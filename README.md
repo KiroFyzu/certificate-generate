@@ -2,7 +2,7 @@
 
 Aplikasi web multi-event untuk menerbitkan dan memverifikasi sertifikat digital. Admin membuat **Event** (seminar/pelatihan/dsb), lalu sertifikatnya bisa didapat peserta lewat tiga jalur: generate sendiri (event mode "Terbuka"), diimport massal dari CSV oleh admin, atau diklaim pakai kode (event mode "Klaim"). Setiap sertifikat berupa PDF + QR code yang bisa diverifikasi publik.
 
-Dibangun dengan [Next.js](https://nextjs.org) (App Router), [Prisma](https://www.prisma.io) + SQLite/libSQL, [Tailwind CSS](https://tailwindcss.com), [pdf-lib](https://pdf-lib.js.org), dan sesi login berbasis JWT ([jose](https://github.com/panva/jose)).
+Dibangun dengan [Next.js](https://nextjs.org) (App Router), [Prisma](https://www.prisma.io) + PostgreSQL ([Supabase](https://supabase.com)), [Tailwind CSS](https://tailwindcss.com), [pdf-lib](https://pdf-lib.js.org), dan sesi login berbasis JWT ([jose](https://github.com/panva/jose)).
 
 ## Fitur
 
@@ -31,23 +31,25 @@ Dibangun dengan [Next.js](https://nextjs.org) (App Router), [Prisma](https://www
    npm install
    ```
 
-2. Buat file `.env` di root project (isi contoh berikut boleh diganti):
+2. Buat project [Supabase](https://supabase.com) (gratis) kalau belum ada, lalu ambil connection string-nya: **Project Settings → Database → Connection string**. Untuk aplikasi server yang jalan terus-menerus (bukan serverless/edge) seperti ini, pakai mode **Session pooler** (port `5432` lewat `pooler.supabase.com`) — lebih kompatibel dengan jaringan IPv4 dibanding direct connection.
+
+3. Buat file `.env` di root project:
 
    ```bash
-   DATABASE_URL="file:./dev.db"
+   DATABASE_URL="postgresql://postgres.xxxxxxxxxxxx:PASSWORD@aws-0-xxxx.pooler.supabase.com:5432/postgres"
    JWT_SECRET="ganti-dengan-string-acak-yang-panjang"
    ```
 
-   - `DATABASE_URL` — lokasi database SQLite lokal (dipakai Prisma via adapter libSQL).
+   - `DATABASE_URL` — connection string Supabase dari langkah sebelumnya. Ganti `PASSWORD` dengan password database kamu (URL-encode kalau ada karakter spesial).
    - `JWT_SECRET` — kunci untuk menandatangani sesi login. **Wajib diisi**, aplikasi akan gagal start kalau kosong. Jangan pakai nilai default saat deploy ke production.
 
-3. Buat database & jalankan migrasi Prisma:
+4. Jalankan migrasi Prisma ke database Supabase itu:
 
    ```bash
    npx prisma migrate dev
    ```
 
-   Ini akan membuat file `dev.db` beserta seluruh tabel (`User`, `Certificate`, `SecurityEvent`, `RateLimit`) sesuai `prisma/schema.prisma`.
+   Ini akan membuat seluruh tabel (`User`, `Event`, `Certificate`, `SecurityEvent`, `RateLimit`) di database Supabase kamu sesuai `prisma/schema.prisma`.
 
 ## Menjalankan mode development
 
@@ -70,16 +72,16 @@ npm run start
 
 Kalau kamu deploy ke Docker "polos" (VPS, `docker compose`, bukan lewat panel seperti Pterodactyl), repo ini menyediakan `Dockerfile` (multi-stage: build lalu jalankan `next start`) dan `docker-compose.yml`.
 
-1. Pastikan `.env` sudah ada dan berisi `JWT_SECRET` (dipakai `docker-compose.yml` lewat `${JWT_SECRET}`). `DATABASE_URL` untuk container sudah di-set otomatis lewat compose, tidak perlu diubah.
+1. Pastikan `.env` di root project sudah ada berisi `DATABASE_URL` (connection string Supabase) dan `JWT_SECRET` — `docker-compose.yml` membaca keduanya dari file itu lewat `${DATABASE_URL}` / `${JWT_SECRET}`.
 2. Build & jalankan:
 
    ```bash
    docker compose up --build
    ```
 
-   Saat container start, `prisma migrate deploy` otomatis dijalankan dulu (menerapkan migrasi ke database di volume `sertif-data`) sebelum server production (`next start`, port `30006`) menyala. Buka [http://localhost:30006](http://localhost:30006).
+   Saat container start, `prisma migrate deploy` otomatis dijalankan dulu (menerapkan migrasi ke database Supabase kamu) sebelum server production (`next start`, port `30006`) menyala. Buka [http://localhost:30006](http://localhost:30006).
 
-3. Database SQLite disimpan di named volume `sertif-data` (path `/app/data/dev.db` di dalam container) supaya datanya tidak hilang saat container di-rebuild/restart.
+3. Database-nya ada di Supabase (cloud), jadi tidak perlu volume untuk data DB. Volume `sertif-uploads` di compose cuma untuk menyimpan background sertifikat yang diupload admin (`public/uploads`), supaya tidak hilang saat container di-rebuild.
 
 > Catatan: setup ini **tidak dipakai** kalau kamu deploy lewat Pterodactyl — lihat section di bawah untuk itu, image Docker-nya sudah disediakan egg-nya sendiri.
 
@@ -95,12 +97,11 @@ Di tab **Startup** server, pilih image Node.js yang tersedia di egg (idealnya **
 
 Upload lewat SFTP ke folder server (`/home/container`), tapi **jangan** upload item berikut — biarkan dibuat ulang langsung di server:
 
-- `node_modules/` — ada binding native (`@libsql/client`) yang harus di-build ulang sesuai OS container, hasil `npm install` di Windows tidak akan jalan di Linux.
+- `node_modules/` — ada binding native (`pg`) yang harus di-build ulang sesuai OS container, hasil `npm install` di Windows tidak akan jalan di Linux.
 - `.next/`, `.next.zip`, `sertif-generate.zip`
-- `dev.db`
 - `.git/`
 
-Upload juga file **`.env`** kamu (`DATABASE_URL="file:./dev.db"` dan `JWT_SECRET=...`) langsung ke folder server — egg generic biasanya tidak otomatis inject env custom, jadi cara termudah ya lewat file `.env` ini (otomatis dibaca `prisma.config.ts` dan Next.js).
+Upload juga file **`.env`** kamu (`DATABASE_URL="<connection string Supabase>"` dan `JWT_SECRET=...`) langsung ke folder server — egg generic biasanya tidak otomatis inject env custom, jadi cara termudah ya lewat file `.env` ini (otomatis dibaca `prisma.config.ts` dan Next.js). Kalau Supabase project-mu membatasi akses lewat IP allowlist, pastikan itu di-nonaktifkan atau IP server Pterodactyl-mu diizinkan.
 
 ### 3. Startup Command
 
@@ -130,7 +131,7 @@ npx prisma migrate deploy && npx next start -p {{SERVER_PORT}}
 
 ### 4. Database
 
-Tidak perlu volume terpisah — seluruh folder `/home/container` di Pterodactyl sudah persistent secara default, jadi `dev.db` aman meski server di-restart atau container-nya diganti.
+Data disimpan di Supabase (cloud), bukan di server Pterodactyl, jadi aman meski server di-restart, container-nya diganti, atau di-reinstall — asal `DATABASE_URL` di `.env` tetap sama. File background sertifikat hasil upload admin (`public/uploads`) tetap ikut folder `/home/container` yang persistent secara default.
 
 ### Kalau sebelumnya kena error "Could not find a production build"
 
@@ -214,5 +215,5 @@ public/
 
 ## Catatan lain
 
-- Database default pakai SQLite lokal (`dev.db`) — file ini di-ignore dari git, jangan di-commit.
+- Database pakai PostgreSQL di [Supabase](https://supabase.com) — `DATABASE_URL` di `.env` **wajib diisi** connection string Supabase kamu sendiri, jangan pernah commit `.env` ke git (sudah di-`.gitignore`).
 - File `AGENTS.md` / `CLAUDE.md` berisi instruksi khusus untuk AI coding assistant, bukan bagian dari dokumentasi penggunaan aplikasi.
