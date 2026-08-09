@@ -7,7 +7,7 @@ Dibangun dengan [Next.js](https://nextjs.org) (App Router), [Prisma](https://www
 ## Fitur
 
 - Registrasi & login pengguna (password di-hash dengan `bcryptjs`, sesi disimpan sebagai JWT di cookie)
-- **Event** — admin bisa buat banyak event, tiap event punya teks sertifikat sendiri (judul, nama event, tanggal, penandatangan) dan boleh upload background sendiri (PDF/PNG/JPG), atau pakai desain bawaan
+- **Event** — admin bisa buat banyak event, tiap event punya teks sertifikat sendiri (judul, nama event, tanggal, penandatangan), boleh upload background sendiri (PDF/PNG/JPG) dan logo (PNG/JPG, posisi kiri/tengah/kanan atas) atau pakai desain bawaan, plus **preview PDF** langsung di form sebelum disimpan
 - Tiap event punya mode **Terbuka** (user login bisa generate sendiri) atau **Klaim** (hanya lewat kode/import admin) — satu user bisa punya banyak sertifikat, satu per event
 - **Klaim sertifikat pakai kode** — admin bisa membuat slot sertifikat + kode unik, peserta login lalu masukkan kodenya di dashboard untuk mengambil sertifikatnya
 - **Bulk import CSV** — admin upload daftar peserta (nama, email) per event, sistem otomatis buat akun (kalau belum ada) & terbitkan sertifikatnya sekaligus
@@ -164,7 +164,7 @@ Login admin ada di halaman terpisah: `/admin-login`.
 
 **Sebagai admin** (login di `/admin-login`):
 
-1. Tab **Events** → **Buat Event**, isi teks sertifikat (judul, tanggal, penandatangan) dan opsional upload background sendiri. Pilih mode Terbuka atau Klaim.
+1. Tab **Events** → **Buat Event**, isi teks sertifikat (judul, tanggal, penandatangan), opsional upload background dan/atau logo sendiri, lalu klik **Lihat Preview** untuk cek tampilan PDF-nya (pakai nama contoh) sebelum **Simpan**. Pilih mode Terbuka atau Klaim.
 2. **Import CSV** di event tersebut untuk menerbitkan sertifikat massal dari daftar nama+email — hasilnya termasuk password sementara untuk akun yang baru dibuat, sebarkan manual ke pesertanya.
 3. Atau **Kode Klaim** untuk membuat sejumlah kode yang bisa dibagikan ke peserta agar mereka klaim sendiri di dashboard.
 4. Tab **Sertifikat** untuk melihat semua sertifikat lintas event, filter berdasarkan event/status, serta **Revoke**/**Aktifkan Lagi** (nonaktifkan sementara, bisa dibalikin) atau **Hapus** (permanen, tidak bisa dibatalkan).
