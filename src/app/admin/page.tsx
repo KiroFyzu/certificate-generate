@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Users, FileText, ShieldAlert, CheckCircle, XCircle, Search, Calendar as CalendarIcon,
-  Plus, Upload, KeyRound, Pencil, Ban, RotateCcw, Copy, X,
+  Plus, Upload, KeyRound, Pencil, Ban, RotateCcw, Copy, X, Trash2,
 } from 'lucide-react'
 
 type Tab = 'overview' | 'users' | 'events' | 'certificates'
@@ -366,6 +366,18 @@ function CertificatesTable({ certificates, events, filters, onFiltersChange, onR
     }
   }
 
+  const deleteCert = async (cert: any) => {
+    const label = cert.user ? `${cert.user.full_name} (${cert.event.name})` : `slot klaim ${cert.claim_code || cert.certificate_id}`
+    if (!window.confirm(`Hapus permanen sertifikat untuk ${label}? Ini tidak bisa dibatalkan. Kalau cuma mau menonaktifkan sementara, pakai Revoke saja.`)) return
+    setBusyId(cert.id)
+    try {
+      await fetch(`/api/admin/certificates/${cert.id}`, { method: 'DELETE' })
+      onRefresh()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
       ACTIVE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
@@ -442,23 +454,33 @@ function CertificatesTable({ certificates, events, filters, onFiltersChange, onR
                   </td>
                   <td className="px-6 py-4">{statusBadge(cert.status)}</td>
                   <td className="px-6 py-4 text-right">
-                    {cert.status === 'REVOKED' ? (
+                    <div className="flex items-center justify-end gap-3">
+                      {cert.status === 'REVOKED' ? (
+                        <button
+                          onClick={() => reinstate(cert)}
+                          disabled={busyId === cert.id}
+                          className="inline-flex items-center gap-1 text-green-600 hover:text-green-800 text-xs font-semibold disabled:opacity-50"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" /> Aktifkan Lagi
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => revoke(cert)}
+                          disabled={busyId === cert.id}
+                          className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 text-xs font-semibold disabled:opacity-50"
+                        >
+                          <Ban className="w-3.5 h-3.5" /> Revoke
+                        </button>
+                      )}
                       <button
-                        onClick={() => reinstate(cert)}
+                        onClick={() => deleteCert(cert)}
                         disabled={busyId === cert.id}
-                        className="inline-flex items-center gap-1 text-green-600 hover:text-green-800 text-xs font-semibold disabled:opacity-50"
+                        className="inline-flex items-center gap-1 text-slate-400 hover:text-red-700 text-xs font-semibold disabled:opacity-50"
+                        title="Hapus permanen"
                       >
-                        <RotateCcw className="w-3.5 h-3.5" /> Aktifkan Lagi
+                        <Trash2 className="w-3.5 h-3.5" /> Hapus
                       </button>
-                    ) : (
-                      <button
-                        onClick={() => revoke(cert)}
-                        disabled={busyId === cert.id}
-                        className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 text-xs font-semibold disabled:opacity-50"
-                      >
-                        <Ban className="w-3.5 h-3.5" /> Revoke
-                      </button>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))
