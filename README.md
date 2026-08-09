@@ -9,7 +9,7 @@ Dibangun dengan [Next.js](https://nextjs.org) (App Router), [Prisma](https://www
 - Registrasi & login pengguna (password di-hash dengan `bcryptjs`, sesi disimpan sebagai JWT di cookie)
 - **Event** — admin bisa buat banyak event, tiap event punya teks sertifikat sendiri (judul, nama event, tanggal, penandatangan), boleh upload background sendiri (PDF/PNG/JPG) dan logo (PNG/JPG, posisi kiri/tengah/kanan atas) atau pakai desain bawaan, plus **preview PDF** langsung di form sebelum disimpan
 - Tiap event punya mode **Terbuka** (user login bisa generate sendiri) atau **Klaim** (hanya lewat kode/import admin) — satu user bisa punya banyak sertifikat, satu per event
-- **Klaim sertifikat pakai kode** — admin bisa membuat slot sertifikat + kode unik, peserta login lalu masukkan kodenya di dashboard untuk mengambil sertifikatnya
+- **Klaim sertifikat pakai kode** — admin buat 1 kode per event dengan batas maksimal pemakai (mis. maks 10 atau 50 orang), lalu bagikan kodenya; tiap peserta login lalu masukkan kode yang sama di dashboard untuk klaim sertifikatnya masing-masing, sampai kuotanya habis. Admin bisa nonaktifkan kode kapan saja tanpa menghapus riwayatnya.
 - **Bulk import CSV** — admin upload daftar peserta (nama, email) per event, sistem otomatis buat akun (kalau belum ada) & terbitkan sertifikatnya sekaligus
 - **Revoke / aktifkan lagi / hapus permanen sertifikat** dari panel admin — Revoke sifatnya sementara (bisa diaktifkan lagi, riwayatnya tetap tersimpan), Hapus sifatnya permanen (slot/kode klaimnya hilang total, cocok buat bersihkan data salah/duplikat)
 - Sertifikat PDF beserta QR code verifikasi, bisa diunduh dari dashboard
@@ -159,14 +159,14 @@ Login admin ada di halaman terpisah: `/admin-login`.
 
 1. Buka `/register` untuk membuat akun, lalu login di `/login` dan masuk ke `/dashboard`.
 2. Kalau ada event bermode "Terbuka", tinggal klik **Generate Sertifikat** di dashboard.
-3. Kalau punya kode klaim dari panitia (event bermode "Klaim", atau kode satuan dari admin), masukkan di kotak **Klaim Sertifikat**.
+3. Kalau punya kode klaim dari panitia (event bermode "Klaim"), masukkan di kotak **Klaim Sertifikat** — satu kode bisa dipakai banyak orang sampai kuota maksimalnya habis.
 4. File PDF (dengan QR code) bisa diunduh dari dashboard. Scan QR code atau buka `/verify/[certificateId]` untuk memverifikasi keasliannya secara publik.
 
 **Sebagai admin** (login di `/admin-login`):
 
 1. Tab **Events** → **Buat Event**, isi teks sertifikat (judul, tanggal, penandatangan), opsional upload background dan/atau logo sendiri, lalu klik **Lihat Preview** untuk cek tampilan PDF-nya (pakai nama contoh) sebelum **Simpan**. Pilih mode Terbuka atau Klaim.
 2. **Import CSV** di event tersebut untuk menerbitkan sertifikat massal dari daftar nama+email — hasilnya termasuk password sementara untuk akun yang baru dibuat, sebarkan manual ke pesertanya.
-3. Atau **Kode Klaim** untuk membuat sejumlah kode yang bisa dibagikan ke peserta agar mereka klaim sendiri di dashboard.
+3. Atau **Kode Klaim** untuk membuat 1 kode dengan batas maksimal berapa orang yang boleh klaim (mis. 10 atau 50), lalu bagikan kode itu ke peserta agar mereka klaim sendiri di dashboard.
 4. Tab **Sertifikat** untuk melihat semua sertifikat lintas event, filter berdasarkan event/status, serta **Revoke**/**Aktifkan Lagi** (nonaktifkan sementara, bisa dibalikin) atau **Hapus** (permanen, tidak bisa dibatalkan).
 
 ## Format CSV bulk import

@@ -84,7 +84,7 @@ export default function AdminDashboard() {
     { label: 'Total Certificates', value: stats.totalCertificates, icon: FileText, color: 'text-cyan-600', bg: 'bg-cyan-100 dark:bg-cyan-900/30' },
     { label: 'Active', value: stats.verifiedCertificates, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/30' },
     { label: 'Revoked', value: stats.revokedCertificates, icon: XCircle, color: 'text-orange-600', bg: 'bg-orange-100 dark:bg-orange-900/30' },
-    { label: 'Pending Claims', value: stats.pendingClaims, icon: KeyRound, color: 'text-purple-600', bg: 'bg-purple-100 dark:bg-purple-900/30' },
+    { label: 'Kode Klaim Aktif', value: stats.activeClaimCodes, icon: KeyRound, color: 'text-purple-600', bg: 'bg-purple-100 dark:bg-purple-900/30' },
     { label: 'Suspicious', value: stats.suspiciousActivities, icon: ShieldAlert, color: 'text-red-600', bg: 'bg-red-100 dark:bg-red-900/30' },
   ]
 
@@ -367,7 +367,7 @@ function CertificatesTable({ certificates, events, filters, onFiltersChange, onR
   }
 
   const deleteCert = async (cert: any) => {
-    const label = cert.user ? `${cert.user.full_name} (${cert.event.name})` : `slot klaim ${cert.claim_code || cert.certificate_id}`
+    const label = cert.user ? `${cert.user.full_name} (${cert.event.name})` : cert.certificate_id
     if (!window.confirm(`Hapus permanen sertifikat untuk ${label}? Ini tidak bisa dibatalkan. Kalau cuma mau menonaktifkan sementara, pakai Revoke saja.`)) return
     setBusyId(cert.id)
     try {
@@ -382,9 +382,8 @@ function CertificatesTable({ certificates, events, filters, onFiltersChange, onR
     const map: Record<string, string> = {
       ACTIVE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
       REVOKED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-      PENDING: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
     }
-    const label: Record<string, string> = { ACTIVE: 'Aktif', REVOKED: 'Dicabut', PENDING: 'Belum Diklaim' }
+    const label: Record<string, string> = { ACTIVE: 'Aktif', REVOKED: 'Dicabut' }
     return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${map[status] || ''}`}>{label[status] || status}</span>
   }
 
@@ -417,7 +416,6 @@ function CertificatesTable({ certificates, events, filters, onFiltersChange, onR
           <option value="">Semua Status</option>
           <option value="ACTIVE">Aktif</option>
           <option value="REVOKED">Dicabut</option>
-          <option value="PENDING">Belum Diklaim</option>
         </select>
       </div>
       <div className="overflow-x-auto">
@@ -426,7 +424,7 @@ function CertificatesTable({ certificates, events, filters, onFiltersChange, onR
             <tr>
               <th className="px-6 py-4 font-semibold">Pemilik</th>
               <th className="px-6 py-4 font-semibold">Event</th>
-              <th className="px-6 py-4 font-semibold">ID / Kode Klaim</th>
+              <th className="px-6 py-4 font-semibold">ID Sertifikat</th>
               <th className="px-6 py-4 font-semibold">Status</th>
               <th className="px-6 py-4 font-semibold text-right">Aksi</th>
             </tr>
@@ -442,14 +440,14 @@ function CertificatesTable({ certificates, events, filters, onFiltersChange, onR
                         <p className="text-xs text-slate-500 dark:text-slate-400">{cert.user.email}</p>
                       </div>
                     ) : (
-                      <span className="text-slate-400 italic">Belum diklaim{cert.note ? ` (${cert.note})` : ''}</span>
+                      <span className="text-slate-400 italic">—</span>
                     )}
                   </td>
                   <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{cert.event.name}</td>
                   <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">
                     {cert.certificate_id}
-                    {cert.claim_code && cert.status === 'PENDING' && (
-                      <span className="block text-amber-600 dark:text-amber-400 font-semibold mt-0.5">{cert.claim_code}</span>
+                    {cert.claim_code && (
+                      <span className="block text-purple-600 dark:text-purple-400 font-semibold mt-0.5">via {cert.claim_code.code}</span>
                     )}
                   </td>
                   <td className="px-6 py-4">{statusBadge(cert.status)}</td>
@@ -830,72 +828,133 @@ function BulkImportModal({ event, onClose, onDone }: { event: any; onClose: () =
 }
 
 function ClaimCodesModal({ event, onClose, onDone }: { event: any; onClose: () => void; onDone: () => void }) {
+  const [codes, setCodes] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [note, setNote] = useState('')
-  const [count, setCount] = useState(1)
+  const [maxUses, setMaxUses] = useState(10)
   const [creating, setCreating] = useState(false)
-  const [codes, setCodes] = useState<any[] | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState('')
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
 
-  const submit = async () => {
+  const fetchCodes = async () => {
+    const res = await fetch(`/api/admin/events/${event.id}/claims`)
+    if (res.ok) {
+      const data = await res.json()
+      setCodes(data.claimCodes || [])
+    }
+  }
+
+  useEffect(() => {
+    fetchCodes().finally(() => setLoading(false))
+  }, [])
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setCreating(true)
+    setError('')
     try {
       const res = await fetch(`/api/admin/events/${event.id}/claims`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: note || undefined, count }),
+        body: JSON.stringify({ note: note || undefined, max_uses: maxUses }),
       })
       const data = await res.json()
-      if (res.ok) {
-        setCodes(data.certificates)
-        onDone()
-      }
+      if (!res.ok) throw new Error(data.error || 'Gagal membuat kode klaim')
+      setNote('')
+      await fetchCodes()
+      onDone()
+    } catch (err: any) {
+      setError(err.message)
     } finally {
       setCreating(false)
     }
   }
 
-  const copyAll = () => {
-    if (!codes) return
-    navigator.clipboard.writeText(codes.map((c) => c.claim_code).join('\n'))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copyCode = (code: any) => {
+    navigator.clipboard.writeText(code.code)
+    setCopiedId(code.id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
+  const toggleActive = async (code: any) => {
+    setBusyId(code.id)
+    try {
+      await fetch(`/api/admin/claim-codes/${code.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !code.is_active }),
+      })
+      await fetchCodes()
+      onDone()
+    } finally {
+      setBusyId(null)
+    }
   }
 
   return (
-    <ModalShell title={`Kode Klaim — ${event.name}`} onClose={onClose}>
-      {!codes ? (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Catatan (opsional)</label>
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="mis. nama peserta yang dituju"
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm" />
+    <ModalShell title={`Kode Klaim — ${event.name}`} onClose={onClose} wide>
+      <div className="space-y-6">
+        <form onSubmit={submit} className="space-y-3 pb-4 border-b border-slate-200 dark:border-slate-800">
+          {error && <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-3 rounded-lg text-sm">{error}</div>}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Maksimal Klaim (jumlah user)</label>
+              <input type="number" min={1} max={10000} value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm" />
+              <p className="text-xs text-slate-400 mt-1">1 kode ini bisa dipakai sampai {maxUses} user berbeda.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Catatan (opsional)</label>
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="mis. dibagikan di grup WhatsApp panitia"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm" />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Jumlah kode (maks 100)</label>
-            <input type="number" min={1} max={100} value={count} onChange={(e) => setCount(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm" />
-          </div>
-          <div className="flex justify-end gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300">Batal</button>
-            <button onClick={submit} disabled={creating} className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
-              {creating ? 'Membuat...' : 'Buat Kode'}
+          <div className="flex justify-end">
+            <button type="submit" disabled={creating} className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+              {creating ? 'Membuat...' : 'Buat Kode Baru'}
             </button>
           </div>
+        </form>
+
+        <div>
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Kode yang sudah dibuat</p>
+          {loading ? (
+            <p className="text-sm text-slate-400">Memuat...</p>
+          ) : codes.length === 0 ? (
+            <p className="text-sm text-slate-400">Belum ada kode klaim untuk event ini.</p>
+          ) : (
+            <div className="max-h-72 overflow-y-auto space-y-2">
+              {codes.map((c) => (
+                <div key={c.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-semibold text-sm text-slate-900 dark:text-white">{c.code}</span>
+                      {!c.is_active && <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">Nonaktif</span>}
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {c.used_count} / {c.max_uses} klaim terpakai{c.note ? ` — ${c.note}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button onClick={() => copyCode(c)} className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-800">
+                      <Copy className="w-3.5 h-3.5" /> {copiedId === c.id ? 'Tersalin!' : 'Salin'}
+                    </button>
+                    <button onClick={() => toggleActive(c)} disabled={busyId === c.id}
+                      className="text-xs font-semibold text-slate-500 hover:text-red-600 disabled:opacity-50">
+                      {c.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600 dark:text-slate-400">{codes.length} kode berhasil dibuat. Bagikan ke penerima sertifikat.</p>
-          <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-3 font-mono text-sm space-y-1">
-            {codes.map((c) => <div key={c.id}>{c.claim_code}</div>)}
-          </div>
-          <div className="flex justify-end gap-3">
-            <button onClick={copyAll} className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-sm font-semibold rounded-lg">
-              <Copy className="w-4 h-4" /> {copied ? 'Tersalin!' : 'Salin Semua'}
-            </button>
-            <button onClick={onClose} className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg">Selesai</button>
-          </div>
+
+        <div className="flex justify-end">
+          <button onClick={onClose} className="px-5 py-2 bg-slate-100 dark:bg-slate-800 text-sm font-semibold rounded-lg">Selesai</button>
         </div>
-      )}
+      </div>
     </ModalShell>
   )
 }
