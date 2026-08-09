@@ -1,19 +1,12 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { decrypt } from '@/lib/auth'
+import { requireAdmin } from '@/lib/auth'
 
 export async function GET(request: Request) {
+  const auth = await requireAdmin(request)
+  if (!auth.ok) return auth.response
+
   try {
-    const sessionCookie = request.headers.get('cookie')?.split('session=')[1]?.split(';')[0]
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const session = await decrypt(sessionCookie)
-    if (!session || session.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -21,11 +14,8 @@ export async function GET(request: Request) {
         email: true,
         role: true,
         created_at: true,
-        certificate: {
-          select: {
-            certificate_id: true,
-            status: true
-          }
+        _count: {
+          select: { certificates: true }
         }
       },
       orderBy: {

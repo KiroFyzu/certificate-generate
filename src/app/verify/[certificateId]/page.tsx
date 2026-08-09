@@ -126,7 +126,7 @@ export default function VerifyPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Untuk Partisipasi Dalam</p>
-                  <p className="font-bold text-lg text-slate-900 dark:text-white leading-tight">Seminar Nasional Teknologi 2026</p>
+                  <p className="font-bold text-lg text-slate-900 dark:text-white leading-tight">{data.event.name}</p>
                 </div>
               </div>
 

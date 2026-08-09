@@ -7,29 +7,58 @@ datasource db {
 }
 
 model User {
-  id              String         @id @default(uuid())
+  id              String          @id @default(uuid())
   full_name       String
-  email           String         @unique
+  email           String          @unique
   password_hash   String
   registration_ip String?
-  role            String         @default("USER") // USER or ADMIN
-  created_at      DateTime       @default(now())
-  updated_at      DateTime       @updatedAt
-  certificate     Certificate?
+  role            String          @default("USER") // USER or ADMIN
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+  certificates    Certificate[]
   security_events SecurityEvent[]
 }
 
+model Event {
+  id                String        @id @default(uuid())
+  name              String
+  description       String?
+  event_date        DateTime?
+  organizer_name    String?
+  signer_name       String?
+  signer_title      String?
+  certificate_title String        @default("CERTIFICATE OF APPRECIATION")
+  completion_text   String        @default("for outstanding participation and successfully completing")
+  template_path     String? // path to uploaded background (pdf/png/jpg), relative to /public. Null = default built-in design.
+  issuance_mode     String        @default("OPEN") // OPEN (self-service) or CLAIM (code/admin-issued only)
+  is_active         Boolean       @default(true)
+  created_by        String?
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
+  certificates      Certificate[]
+}
+
 model Certificate {
-  id                 String   @id @default(uuid())
-  user_id            String   @unique
-  certificate_id     String   @unique // e.g. CERT-7F4A92D81C
-  verification_token String?  
-  status             String   @default("ACTIVE") // ACTIVE, REVOKED
+  id                 String    @id @default(uuid())
+  user_id            String? // null until claimed, for claim-code slots
+  event_id           String
+  certificate_id     String    @unique // e.g. CERT-7F4A92D81C
+  verification_token String?
+  status             String    @default("ACTIVE") // ACTIVE, REVOKED, PENDING (unclaimed claim-code slot)
+  claim_code         String?   @unique // only set for claim-code issued certificates
+  claimed_at         DateTime?
+  note               String? // admin bookkeeping note (e.g. intended recipient), not authoritative for PDF name
   generation_ip      String?
-  issued_at          DateTime @default(now())
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
-  user               User     @relation(fields: [user_id], references: [id])
+  revoked_at         DateTime?
+  revoked_reason     String?
+  revoked_by         String?
+  issued_at          DateTime  @default(now())
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  user               User?     @relation(fields: [user_id], references: [id])
+  event              Event     @relation(fields: [event_id], references: [id])
+
+  @@unique([user_id, event_id])
 }
 
 model SecurityEvent {
@@ -37,7 +66,7 @@ model SecurityEvent {
   user_id     String?
   ip_address  String
   event_type  String
-  metadata    String?  
+  metadata    String?
   created_at  DateTime @default(now())
   user        User?    @relation(fields: [user_id], references: [id])
 }

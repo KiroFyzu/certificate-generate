@@ -1,34 +1,27 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { decrypt } from '@/lib/auth'
+import { getSession } from '@/lib/auth'
 import { checkRateLimit } from '@/lib/rate-limit'
-
-function generateCertId() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  let result = 'CERT-'
-  for (let i = 0; i < 10; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return result
-}
+import { generateCertificateId } from '@/lib/certificate-id'
 
 export async function POST(request: Request) {
   try {
     const ip = request.headers.get('x-forwarded-for') || '127.0.0.1'
     const isAllowed = await checkRateLimit(ip, 'generate', 3, 15 * 60 * 1000)
-    
+
     if (!isAllowed) {
       return NextResponse.json({ error: 'Terlalu banyak percobaan. Silakan coba lagi nanti.' }, { status: 429 })
     }
 
-    const sessionCookie = request.headers.get('cookie')?.split('session=')[1]?.split(';')[0]
-    if (!sessionCookie) {
+    const session = await getSession(request)
+    if (!session || !session.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const session = await decrypt(sessionCookie)
-    if (!session || !session.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const body = await request.json().catch(() => ({}))
+    const eventId: string | undefined = body.event_id
+    if (!eventId) {
+      return NextResponse.json({ error: 'event_id wajib diisi' }, { status: 400 })
     }
 
     // Check if user exists
@@ -37,26 +30,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Generate random cert ID
-    const certId = generateCertId()
+    const event = await prisma.event.findUnique({ where: { id: eventId } })
+    if (!event || !event.is_active) {
+      return NextResponse.json({ error: 'Event tidak ditemukan atau tidak aktif' }, { status: 404 })
+    }
+    if (event.issuance_mode !== 'OPEN') {
+      return NextResponse.json({
+        error: 'Sertifikat untuk event ini hanya bisa didapat lewat kode klaim atau diterbitkan admin.',
+      }, { status: 403 })
+    }
+
+    const certId = generateCertificateId()
 
     try {
-      // Transaction to ensure atomicity. Prisma handles SQLite locking.
       const certificate = await prisma.certificate.create({
         data: {
           user_id: user.id,
+          event_id: eventId,
           certificate_id: certId,
           generation_ip: ip,
         }
       })
 
-      // Log Security Event
       await prisma.securityEvent.create({
         data: {
           user_id: user.id,
           ip_address: ip,
           event_type: 'GENERATE_CERTIFICATE',
-          metadata: JSON.stringify({ certificate_id: certId })
+          metadata: JSON.stringify({ certificate_id: certId, event_id: eventId })
         }
       })
 
@@ -64,10 +65,8 @@ export async function POST(request: Request) {
 
     } catch (e: any) {
       if (e.code === 'P2002') {
-        // Unique constraint failed on user_id or certificate_id
-        // Usually user_id because one user = one certificate
-        return NextResponse.json({ 
-          error: 'Anda sudah memiliki sertifikat. Setiap peserta hanya dapat memperoleh 1 sertifikat.' 
+        return NextResponse.json({
+          error: 'Anda sudah memiliki sertifikat untuk event ini.'
         }, { status: 400 })
       }
       throw e

@@ -12,13 +12,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ cert
     const certificate = await prisma.certificate.findUnique({
       where: { certificate_id: certificateId },
       include: {
-        user: {
-          select: { full_name: true }
-        }
-      }
+        user: { select: { full_name: true } },
+        event: { select: { name: true, organizer_name: true } },
+      },
     })
 
-    if (!certificate) {
+    // A certificate that doesn't exist, or is still an unclaimed claim-code slot,
+    // is treated the same way publicly: not found.
+    if (!certificate || certificate.status === 'PENDING' || !certificate.user) {
       return NextResponse.json({ error: 'Sertifikat tidak ditemukan' }, { status: 404 })
     }
 
@@ -30,7 +31,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ cert
         issued_at: certificate.issued_at,
         user: {
           full_name: certificate.user.full_name
-        }
+        },
+        event: {
+          name: certificate.event.name,
+          organizer_name: certificate.event.organizer_name,
+        },
       }
     })
   } catch (error) {

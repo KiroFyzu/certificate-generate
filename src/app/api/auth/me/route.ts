@@ -21,7 +21,10 @@ export async function GET(request: Request) {
         full_name: true,
         email: true,
         role: true,
-        certificate: true
+        certificates: {
+          include: { event: { select: { id: true, name: true } } },
+          orderBy: { issued_at: 'desc' },
+        }
       }
     })
 
